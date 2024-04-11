@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package gompq;
+
+import "google/protobuf/timestamp.proto";
+
+message Message {
+  string id = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  string body = 3;
+}
