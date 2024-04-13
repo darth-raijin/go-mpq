@@ -6,5 +6,5 @@ Furthermore, we get a centralized way of defining our queues. Clean code ğŸ‘ğŸ‘
 */
 const (
 	EventsQueue = "events"
-  LogsQueue = "logs
+	LogsQueue   = "logs"
 )
