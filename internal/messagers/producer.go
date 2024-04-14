@@ -7,6 +7,7 @@ import (
 	"go.uber.org/zap"
 )
 
+//go:generate mockery --name ProducerInterface --inpackage
 type ProducerInterface interface {
 	PublishMessage(ctx context.Context, contentType, routingKey, queueName string, body []byte) error
 	Close() error

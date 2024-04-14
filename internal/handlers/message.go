@@ -7,7 +7,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-//go:generate mockery --name Message
+//go:generate mockery --name Message --inpackage
 type Message interface {
 	HandleMessage(data []byte) error
 }

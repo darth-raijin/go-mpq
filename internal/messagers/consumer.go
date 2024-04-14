@@ -1,26 +1,32 @@
 package messagers
 
 import (
+	"context"
+	"errors"
+	"net"
+	"time"
+
 	"github.com/darth-raijin/go-mpq/internal/handlers"
-	"log"
+	"golang.org/x/sync/errgroup"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 	"go.uber.org/zap"
 )
 
-//go:generate mockery --name Consumer
+//go:generate mockery --name Consumer --inpackage
 type Consumer interface {
-	StartListening(queueName string) error
+	StartListening(ctx context.Context, exchangeName, queueName, routingKey string) error
 	StopListening() error
+	isRetryable(err error) bool
+	ProcessMessage(ctx context.Context, d amqp.Delivery) error
+	initializeExchange(exchangeName string) error
 }
 
-// rabbitMQConsumer implements the Consumer interface for RabbitMQ.
 type rabbitMQConsumer struct {
 	conn           *amqp.Connection
 	channel        *amqp.Channel
 	messageHandler handlers.Message
 	workerCount    int
-	stopChan       chan bool
 	logger         *zap.Logger
 }
 
@@ -28,11 +34,9 @@ type ConsumerOptions struct {
 	RabbitMQURL    string
 	MessageHandler handlers.Message
 	WorkerCount    int
-	StopChan       chan bool
 	Logger         *zap.Logger
 }
 
-// NewConsumer initializes and returns a Consumer with RabbitMQ as the underlying message broker
 func NewConsumer(opts ConsumerOptions) (Consumer, error) {
 	conn, err := amqp.Dial(opts.RabbitMQURL)
 	if err != nil {
@@ -40,6 +44,7 @@ func NewConsumer(opts ConsumerOptions) (Consumer, error) {
 	}
 	ch, err := conn.Channel()
 	if err != nil {
+		conn.Close() // proper error handling
 		return nil, err
 	}
 
@@ -49,55 +54,121 @@ func NewConsumer(opts ConsumerOptions) (Consumer, error) {
 		channel:        ch,
 		messageHandler: opts.MessageHandler,
 		workerCount:    opts.WorkerCount,
-		stopChan:       opts.StopChan,
+		logger:         opts.Logger,
 	}, nil
 }
 
-// StartListening begins listening for messages on the specified queue and processes them concurrently.
-func (c *rabbitMQConsumer) StartListening(queueName string) error {
-	messages, err := c.channel.Consume(
+func (c *rabbitMQConsumer) StartListening(ctx context.Context, exchangeName, queueName, routingKey string) error {
+	if err := c.initializeExchange(exchangeName); err != nil {
+		c.logger.Error("Failed to declare exchange", zap.Error(err))
+		return err
+	}
+
+	err := c.initializeQueue(queueName, routingKey, exchangeName)
+	if err != nil {
+		return err
+	}
+
+	messages, err := c.channel.ConsumeWithContext(
+		ctx,
 		queueName,
-		"go-mpq", // consumer tag - unique identifier for the consumer
+		"go-mpq",
 		false,
 		false,
-		false, // no-local - false means receive messages sent from this connection too
-		false, // no-wait - false means the server will respond to commands
-		nil,   // arguments - additional command arguments
+		false,
+		false,
+		nil,
 	)
 	if err != nil {
 		return err
 	}
 
+	g, ctx := errgroup.WithContext(ctx)
 	for i := 0; i < c.workerCount; i++ {
-		go func() {
+		g.Go(func() error {
 			for {
 				select {
 				case d, ok := <-messages:
 					if !ok {
-						return
+						return nil // stopping the goroutine if channel is closed
 					}
-					if err := c.messageHandler.HandleMessage(d.Body); err != nil {
+					if err := c.ProcessMessage(ctx, d); err != nil {
 						c.logger.Error("Error processing message", zap.Error(err))
-						d.Nack(false, true) // multiple: false, requeue: true
-						continue
+						return err
 					}
-					d.Ack(false) // multiple: false
-				case <-c.stopChan:
-					c.logger.Info("Consumer stopped listening")
-					return
+				case <-ctx.Done():
+					return ctx.Err()
 				}
 			}
-		}()
+		})
 	}
 
-	log.Println("Consumer started listening...")
+	c.logger.Info("Started listening for messages")
+	return g.Wait() // wait for all go routines to finish
+}
 
+func (c *rabbitMQConsumer) initializeQueue(queueName string, routingKey string, exchangeName string) error {
+	_, err := c.channel.QueueDeclare(
+		queueName,
+		true,  // durable
+		false, // delete when unused
+		false, // exclusive
+		false, // no-wait
+		nil,   // arguments
+	)
+	if err != nil {
+		return err
+	}
+
+	err = c.channel.QueueBind(
+		queueName,
+		routingKey,
+		exchangeName,
+		false, // no-wait
+		nil,   // arguments
+	)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
-func (c *rabbitMQConsumer) StopListening() error {
-	close(c.stopChan)
+func (c *rabbitMQConsumer) ProcessMessage(ctx context.Context, d amqp.Delivery) error {
+	const maxRetries = 5
+	var retryCount int
 
+	for {
+		if retryCount > maxRetries {
+			return d.Nack(false, true)
+		}
+
+		err := c.messageHandler.HandleMessage(d.Body)
+		if err == nil {
+			return d.Ack(false)
+		}
+
+		// If the error is not retryable we just nack the message and remove it from the queue
+		if !c.isRetryable(err) {
+			return d.Nack(false, false)
+		}
+
+		c.logger.Error("Error processing message, will retry", zap.Error(err))
+
+		// Backing off with jitter
+		// Sleep is based on the formula 2^retryCount * 1 second
+		backoff := time.Duration(1<<uint(retryCount)) * time.Second
+		select {
+		case <-time.After(backoff):
+			// Retry the message
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+
+		retryCount++
+	}
+}
+
+func (c *rabbitMQConsumer) StopListening() error {
 	if err := c.channel.Close(); err != nil {
 		return err
 	}
@@ -105,6 +176,31 @@ func (c *rabbitMQConsumer) StopListening() error {
 		return err
 	}
 
-	c.logger.Info("Stopped listening for messages :o")
+	c.logger.Info("Stopped listening and closed connection")
 	return nil
+}
+
+func (c *rabbitMQConsumer) isRetryable(err error) bool {
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		return true
+	}
+
+	// We could implement domain specific errors here and expand our retryability criteria
+	// For some errors like "queue not found" we might not want to retry
+	// If errors are caused by invalid data it is not retryable
+
+	return false
+}
+
+func (c *rabbitMQConsumer) initializeExchange(exchangeName string) error {
+	return c.channel.ExchangeDeclare(
+		exchangeName, // name of the exchange
+		"topic",      // type of exchange
+		true,         // durable
+		false,        // auto-deleted
+		false,        // internal
+		false,        // no-wait
+		nil,          // arguments
+	)
 }
