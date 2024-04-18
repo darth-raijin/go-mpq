@@ -1,8 +1,9 @@
 package handlers
 
 import (
+	"fmt"
 	gompq "github.com/darth-raijin/go-mpq/internal/protos"
-	"github.com/jmoiron/sqlx"
+	"github.com/darth-raijin/go-mpq/internal/repositories"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 )
@@ -13,19 +14,19 @@ type Message interface {
 }
 
 type MessageOptions struct {
-	Logger *zap.Logger
-	DB     *sqlx.DB
+	Logger            *zap.Logger
+	MessageRepository repositories.Message
 }
 
 type message struct {
-	logger *zap.Logger
-	db     *sqlx.DB
+	logger            *zap.Logger
+	messageRepository repositories.Message
 }
 
-func NewMessage(opts MessageOptions) Message {
+func NewMessage(options MessageOptions) Message {
 	return &message{
-		logger: opts.Logger,
-		db:     opts.DB,
+		logger:            options.Logger,
+		messageRepository: options.MessageRepository,
 	}
 }
 
@@ -35,6 +36,8 @@ func (m message) HandleMessage(data []byte) error {
 		m.logger.Error("Failed to unmarshal message", zap.Error(err))
 		return err
 	}
+
+	fmt.Println(fmt.Sprintf("Received message: %s", msg.Body))
 
 	return nil
 }

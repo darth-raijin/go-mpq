@@ -24,7 +24,7 @@ func TestNewConsumer(t *testing.T) {
 	}{
 		{
 			name:          "Valid connection URL",
-			connectionURL: strings.ReplaceAll(rabbitMQConnectionString, "guest", "invalid"),
+			connectionURL: rabbitMQConnectionString,
 			expectError:   false,
 		},
 		{
@@ -38,7 +38,10 @@ func TestNewConsumer(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Call NewConsumer function
 			consumer, err := messagers.NewConsumer(messagers.ConsumerOptions{
-				RabbitMQURL: tt.connectionURL,
+				RabbitMQURL:    tt.connectionURL,
+				MessageHandler: nil,
+				WorkerCount:    0,
+				Logger:         zap.NewNop(),
 			})
 
 			if tt.expectError {
