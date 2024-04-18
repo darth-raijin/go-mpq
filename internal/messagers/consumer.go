@@ -108,6 +108,7 @@ func (c *rabbitMQConsumer) StartListening(ctx context.Context, exchangeName, que
 				}
 			}
 		})
+		c.logger.Info("Started worker", zap.Int("worker_id", i+1))
 	}
 
 	c.logger.Info("Started listening for messages")
