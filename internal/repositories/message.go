@@ -5,6 +5,7 @@ import (
 
 	"github.com/darth-raijin/go-mpq/internal/models"
 	"github.com/jmoiron/sqlx"
+	_ "github.com/lib/pq"
 )
 
 type Message interface {

@@ -4,8 +4,9 @@ services:
   rabbitmq:
     image: "rabbitmq:3.11-management"
     environment:
-      RABBITMQ_DEFAULT_USER: user
-      RABBITMQ_DEFAULT_PASS: password
+      RABBITMQ_DEFAULT_USER: secretusername
+      RABBITMQ_DEFAULT_PASS: secretpassword123
+      RABBITMQ_DEFAULT_VHOST: dev
     ports:
       - "5672:5672"
       - "15672:15672"
@@ -16,9 +17,9 @@ services:
   postgres:
     image: postgres:16
     environment:
-      POSTGRES_DB: postgresdb
-      POSTGRES_USER: postgresuser
-      POSTGRES_PASSWORD: postgrespassword
+      - POSTGRES_PASSWORD=secretpassword
+      - POSTGRES_USER=secretusername
+      - POSTGRES_DB=gompq
     ports:
       - "5432:5432"
     volumes:

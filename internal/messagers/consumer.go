@@ -3,6 +3,7 @@ package messagers
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"time"
 
@@ -31,14 +32,20 @@ type rabbitMQConsumer struct {
 }
 
 type ConsumerOptions struct {
-	RabbitMQURL    string
+	Host     string
+	VHost    string
+	Port     string
+	Username string
+	Password string
+
 	MessageHandler handlers.Message
 	WorkerCount    int
 	Logger         *zap.Logger
 }
 
 func NewConsumer(opts ConsumerOptions) (Consumer, error) {
-	conn, err := amqp.Dial(opts.RabbitMQURL)
+	connURL := fmt.Sprintf("amqp://%v:%v@%v:%v/%v", opts.Username, opts.Password, opts.Host, opts.Port, opts.VHost)
+	conn, err := amqp.Dial(connURL)
 	if err != nil {
 		return nil, err
 	}
@@ -48,7 +55,7 @@ func NewConsumer(opts ConsumerOptions) (Consumer, error) {
 		return nil, err
 	}
 
-	opts.Logger.Info("Connected to RabbitMQ", zap.String("url", opts.RabbitMQURL))
+	opts.Logger.Info("Connected to RabbitMQ", zap.String("url", connURL))
 	return &rabbitMQConsumer{
 		conn:           conn,
 		channel:        ch,
