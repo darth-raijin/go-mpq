@@ -18,7 +18,7 @@
 # vendor/
 
 .idea/
-.rabbitmq_data/
-.postgres_data/
+rabbitmq_data/
+postgres_data/
 # Go workspace file
 go.work
