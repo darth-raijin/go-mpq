@@ -1,14 +1,23 @@
 package repositories
 
-import "github.com/jmoiron/sqlx"
+import (
+	"fmt"
+
+	"github.com/darth-raijin/go-mpq/internal/models"
+	"github.com/jmoiron/sqlx"
+)
 
 type Message interface {
-	SaveMessage() error
+	SaveMessage(message models.Message) error
 	GetByID() error
 }
 
 type MessageRepositoryOptions struct {
-	DB *sqlx.DB
+	Username string
+	Password string
+	Host     string
+	Port     string
+	DBName   string
 }
 
 type MessageRepository struct {
@@ -16,12 +25,13 @@ type MessageRepository struct {
 }
 
 func NewMessageRepository(opts MessageRepositoryOptions) Message {
+	dsn := fmt.Sprintf("user=%s password=%s host=%s port=%s dbname=%s sslmode=disable", opts.Username, opts.Password, opts.Host, opts.Port, opts.DBName)
 	return &MessageRepository{
-		db: opts.DB,
+		db: sqlx.MustConnect("postgres", dsn),
 	}
 }
 
-func (m MessageRepository) SaveMessage() error {
+func (m MessageRepository) SaveMessage(message models.Message) error {
 	//TODO implement me
 	panic("implement me")
 }

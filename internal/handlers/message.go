@@ -2,6 +2,7 @@ package handlers
 
 import (
 	gompq "github.com/darth-raijin/go-mpq/internal/protos"
+	"github.com/darth-raijin/go-mpq/internal/repositories"
 	"github.com/jmoiron/sqlx"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
@@ -13,13 +14,15 @@ type Message interface {
 }
 
 type MessageOptions struct {
-	Logger *zap.Logger
-	DB     *sqlx.DB
+	Logger            *zap.Logger
+	DB                *sqlx.DB
+	MessageRepository repositories.Message
 }
 
 type message struct {
-	logger *zap.Logger
-	db     *sqlx.DB
+	logger            *zap.Logger
+	db                *sqlx.DB
+	messageRepository repositories.Message
 }
 
 func NewMessage(opts MessageOptions) Message {
