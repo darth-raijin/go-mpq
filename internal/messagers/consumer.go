@@ -112,7 +112,7 @@ func (c *rabbitMQConsumer) StartListening(ctx context.Context, exchangeName, que
 	}
 
 	c.logger.Info("Started listening for messages")
-	return g.Wait() // wait for all go routines to finish
+	return g.Wait()
 }
 
 func (c *rabbitMQConsumer) initializeQueue(queueName string, routingKey string, exchangeName string) error {

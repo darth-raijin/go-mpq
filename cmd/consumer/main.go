@@ -67,7 +67,7 @@ func wireDependencies(config config.Config, logger *zap.Logger, err error) messa
 		Username:       config.RabbitMQUser,
 		Password:       config.RabbitMQPass,
 		VHost:          config.RabbitMQVHost,
-		WorkerCount:    1,
+		WorkerCount:    5,
 	})
 	if err != nil {
 		logger.Error("error creating consumer", zap.Error(err))
