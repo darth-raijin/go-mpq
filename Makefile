@@ -12,3 +12,9 @@ down:
 	@echo "Spinning down containers"
 	docker compose down
 	@echo "Containers are down... maybe :thinking:"
+
+start-both:
+	@echo "Starting both services"
+	go run ./cmd/consumer/main.go &
+	go run ./cmd/producer/main.go
+	@echo "Both services are running"

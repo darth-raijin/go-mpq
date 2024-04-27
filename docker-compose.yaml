@@ -14,14 +14,26 @@ services:
       - "./rabbitmq_data:/var/lib/rabbitmq"
     restart: always
 
-  postgres:
-    image: postgres:16
-    environment:
-      - POSTGRES_PASSWORD=secretpassword
-      - POSTGRES_USER=secretusername
-      - POSTGRES_DB=gompq
-    ports:
-      - "5432:5432"
+  cockroachdb-1:
+    image: cockroachdb/cockroach:v22.1.0
+    command: start --insecure --join=cockroachdb-1,cockroachdb-2,cockroachdb-3
     volumes:
-      - "./postgres_data:/var/lib/postgresql/data"
+      - "./cockroachdb_data/cockroachdb-1:/cockroach/cockroach-data"
+    ports:
+      - "26257:26257"
+      - "8080:8080"
+    restart: always
+
+  cockroachdb-2:
+    image: cockroachdb/cockroach:v22.1.0
+    command: start --insecure --join=cockroachdb-1,cockroachdb-2,cockroachdb-3
+    volumes:
+      - "./cockroachdb_data/cockroachdb-2:/cockroach/cockroach-data"
+    restart: always
+
+  cockroachdb-3:
+    image: cockroachdb/cockroach:v22.1.0
+    command: start --insecure --join=cockroachdb-1,cockroachdb-2,cockroachdb-3
+    volumes:
+      - "./cockroachdb_data/cockroachdb-3:/cockroach/cockroach-data"
     restart: always
